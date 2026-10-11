@@ -1,89 +1,112 @@
-# ShopEase production deployment
+# ShopEase Docker production runbook
 
-## Audit summary
-
-ShopEase is a Django 5.2 project rooted at `manage.py`, with the project package in `shopease/` and the commerce app in `store/`. Templates are in `templates/store/`; source static files are in `static/`; collected WhiteNoise assets are written to `staticfiles/`; legacy filesystem uploads use `media/`, while the current upload flow stores images in the `UploadedImage` database table. There are 23 app migrations, Razorpay payment endpoints, Google OAuth support, and a `/health/` endpoint.
-
-No Celery, Redis, Channels, or other background-worker integration was found, so the default Compose stack intentionally contains only Django and PostgreSQL. WhiteNoise serves static files directly, so a separate Nginx container is not required. Add Nginx or Redis only if the application gains a reverse-proxy or worker requirement.
-
-## Media persistence
-
-Render and Railway web-service filesystems are ephemeral: files written under `MEDIA_ROOT` can disappear after a restart, redeploy, or rescheduling. ShopEase's current admin/product upload path writes image bytes to the PostgreSQL `uploaded_images` table (`store.models.UploadedImage`) and serves them through `/assets/...`, so those uploads persist as long as the managed PostgreSQL database is durable and backed up. The legacy `media/uploads/` fallback is **not** durable on a PaaS filesystem. If future code writes files there, configure S3, Cloudinary, or another object store before relying on those uploads. Static files in `static/` are rebuilt by `collectstatic` and are safe to serve through WhiteNoise.
-
-Before this deployment work, the repository had environment-driven settings and the PostgreSQL/WhiteNoise dependencies, but did not have container configuration, a runtime entrypoint, a complete ignore policy, or a discrete PostgreSQL fallback. The checked-in `.env` and SQLite database must be treated as potentially sensitive: rotate any credentials that were ever committed, remove `.env` from Git history where appropriate, and use the untracked `.env` only for local development.
-
-## Files changed
-
-- `shopease/settings.py`: validates production `DEBUG`, requires a production database, supports `DATABASE_URL` and discrete `POSTGRES_*`/`DB_*` variables, configures connection age and optional TLS, and keeps SQLite as a local-only fallback.
-- `.env.example`: documents both database formats and production secrets.
-- `.gitignore`, `.dockerignore`: exclude credentials, local databases, runtime output, and build artefacts.
-- `Dockerfile`: builds a non-root Python image with the production requirements.
-- `docker-compose.yml`: starts Django and a health-checked PostgreSQL 16 service with persistent volumes.
-- `entrypoint.sh`: runs migrations, collects static files, then starts Gunicorn.
-- `Procfile`, `render.yaml`: use the same runtime entrypoint; Render migrations no longer run during the build phase.
-- `PRODUCTION_DEPLOYMENT.md`: this audit and operational runbook.
-
-The existing `requirements.txt` and `requirements.production.txt` already include the required `psycopg2-binary`, `dj-database-url`, `whitenoise`, `gunicorn`, and `python-dotenv` packages. No dependency addition was necessary.
-
-## Local PostgreSQL with Docker
-
-1. Copy `.env.example` to `.env` and set a unique `SECRET_KEY`, payment credentials, and a strong `POSTGRES_PASSWORD`. Leave `DATABASE_URL` empty for the Compose setup.
-2. Build and start the services:
-
-   ```powershell
-   docker compose up --build
-   ```
-
-3. In another terminal, create an administrator if needed:
-
-   ```powershell
-   docker compose exec web python manage.py createsuperuser
-   ```
-
-4. Visit `http://localhost:8000/health/`. Stop the stack with `docker compose down`; add `-v` only when intentionally deleting the local PostgreSQL/media volumes.
-
-## Non-container local commands
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-Copy-Item .env.example .env
-# Set DEBUG=true, IS_PRODUCTION=false, and leave DATABASE_URL empty for SQLite.
-python manage.py migrate
-python manage.py collectstatic --noinput
-python manage.py runserver
-```
-
-To use PostgreSQL instead, set `DATABASE_URL=postgresql://user:password@localhost:5432/shopease` or set `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, and `POSTGRES_PORT`, then run:
-
-```powershell
-python manage.py migrate --noinput
-python manage.py collectstatic --noinput
-gunicorn shopease.wsgi:application
-```
-
-## Render deployment
-
-Create a PostgreSQL database, connect the repository, and use the checked-in `render.yaml` Blueprint. Set `SECRET_KEY`, `DATABASE_URL`, `APP_BASE_URL`, `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, `CORS_ALLOWED_ORIGINS`, and the Razorpay secrets in the Render environment. `DATABASE_SSL_REQUIRE=true` is appropriate for hosted PostgreSQL. The service starts with `sh entrypoint.sh`, which applies migrations before serving traffic.
-
-For any provider, the essential sequence is:
+ShopEase is deployed as a single Docker Compose stack:
 
 ```text
-pip install -r requirements.production.txt
-python manage.py migrate --noinput
-python manage.py collectstatic --noinput
-gunicorn --bind 0.0.0.0:$PORT shopease.wsgi:application
+Internet -> Caddy (:80/:443) -> Django/Gunicorn (internal :8080) -> PostgreSQL (internal :5432)
 ```
 
-Keep `DEBUG=false`, use HTTPS, include the deployed hostname in `ALLOWED_HOSTS`, and list complete `https://...` origins in `CSRF_TRUSTED_ORIGINS`. A local filesystem is ephemeral on most PaaS platforms; use the existing database-backed upload flow or object storage for durable media.
+The `db` service has no published port. Caddy owns the public HTTP/HTTPS ports, terminates TLS, and proxies requests to Gunicorn. Django serves collected static files through WhiteNoise. Product and category uploads are stored in PostgreSQL through `UploadedImage`; the `media_data` named volume preserves the legacy filesystem upload fallback.
+
+The stack has four persistent named volumes:
+
+- `postgres_data` — PostgreSQL data
+- `media_data` — legacy media uploads
+- `caddy_data` — certificates and ACME state
+- `caddy_config` — Caddy runtime configuration
+
+Do not run `docker compose down -v` on a deployed stack. Plain `docker compose down` preserves all four volumes.
+
+## Production environment
+
+Copy `.env.example` to an untracked, host-only file, for example `/etc/shopease/production.env` (or `.env.production` for a local smoke test). Replace every example domain and secret before deployment. Do not use the workspace development `.env` as a Docker deployment file.
+
+Required values include:
+
+```text
+CADDY_SITE=shop.example.com
+APP_BASE_URL=https://shop.example.com
+PAYMENT_CALLBACK_BASE_URL=https://shop.example.com
+ALLOWED_HOSTS=shop.example.com,www.shop.example.com
+CSRF_TRUSTED_ORIGINS=https://shop.example.com,https://www.shop.example.com
+SECRET_KEY=<unique Django secret>
+POSTGRES_DB=shopease
+POSTGRES_USER=shopease
+POSTGRES_PASSWORD=<unique PostgreSQL password>
+```
+
+The Compose file deliberately forces Django to use the internal `db` service (`DB_HOST=db` and `POSTGRES_HOST=db`) and clears `DATABASE_URL`. This prevents a loopback or stale external URL from bypassing the persistent Compose PostgreSQL database.
+
+## Deploy
+
+On the Docker host, point DNS for `CADDY_SITE` at the host before starting the stack, and ensure inbound TCP 80 and 443 are open. Caddy will obtain and renew the HTTPS certificate automatically.
+
+PowerShell:
+
+```powershell
+$env:ENV_FILE = 'C:\secure\shopease.production.env'
+docker compose --env-file $env:ENV_FILE config --quiet
+docker compose --env-file $env:ENV_FILE build --progress=plain
+docker compose --env-file $env:ENV_FILE up -d
+docker compose --env-file $env:ENV_FILE ps
+docker compose --env-file $env:ENV_FILE logs --tail=200
+```
+
+Linux/macOS:
+
+```sh
+export ENV_FILE=/etc/shopease/production.env
+docker compose --env-file "$ENV_FILE" config --quiet
+docker compose --env-file "$ENV_FILE" build --progress=plain
+docker compose --env-file "$ENV_FILE" up -d
+docker compose --env-file "$ENV_FILE" ps
+docker compose --env-file "$ENV_FILE" logs --tail=200
+```
+
+`config --quiet` rejects missing domain, secret, or PostgreSQL initialization values before any container starts. The web entrypoint runs `migrate --noinput` and `collectstatic --noinput` before Gunicorn starts. The same migration command is safe to run explicitly after startup:
+
+```powershell
+docker compose --env-file $env:ENV_FILE exec web python manage.py migrate --noinput
+docker compose --env-file $env:ENV_FILE exec web python manage.py check --deploy
+```
+
+## Existing data
+
+An existing `postgres_data` volume is authoritative and is never replaced by the Compose configuration. Do not run a fixture load, initialization script, or `down -v` against it.
+
+For a first PostgreSQL deployment sourced from the local SQLite database, take a verified backup first and import a reviewed, private fixture only into a fresh empty PostgreSQL volume. Keep exports outside Git and outside the Docker build context. The import must be a deliberate one-time migration; it must not be added to the container entrypoint because doing so could overwrite administrator changes on later restarts.
+
+Before making a one-time import, capture a rollback backup:
+
+```powershell
+docker compose --env-file $env:ENV_FILE exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > .\shopease-before-import.sql
+```
+
+Verify product, category, order, user, and uploaded-image counts before and after importing. Never copy an unreviewed fixture into a live database.
 
 ## Verification
 
+After all three containers report healthy, test through the public HTTPS domain, not the internal web port:
+
 ```powershell
-$env:DEBUG='true'; $env:IS_PRODUCTION='false'
-python manage.py check
-python manage.py test store --verbosity 1
+python scripts/verify_production_https.py https://shop.example.com
 ```
 
-For production configuration, run `python manage.py check --deploy` with the production environment loaded. Confirm `/health/`, static assets, login/cart/checkout, admin uploads, payment webhooks, database backups, and HTTPS redirects after release.
+The script covers health, HTTP-to-HTTPS redirect, home, category/search/product pages, API routes, static assets, images, registration/login/logout, cart, wishlist, checkout, orders, payment-endpoint behavior, Django admin reachability, deep URL refreshes, and security headers. Configure real Razorpay live credentials and perform a separately authorized low-value payment before calling payment processing live.
+
+Useful operational checks:
+
+```powershell
+docker compose --env-file $env:ENV_FILE ps
+docker compose --env-file $env:ENV_FILE logs web db caddy --tail=200
+docker compose --env-file $env:ENV_FILE exec web python manage.py check
+docker compose --env-file $env:ENV_FILE exec web python manage.py check --deploy
+```
+
+## Security notes
+
+- `DEBUG` is forced off inside the web service.
+- Secrets remain in the selected ignored environment file, never in Git.
+- PostgreSQL is reachable only over the Compose network.
+- Caddy handles HTTPS; Django receives the forwarded HTTPS headers and uses secure session/CSRF cookies.
+- The setup has no provider-specific service, manifest, URL, webhook, environment variable, or runtime dependency.

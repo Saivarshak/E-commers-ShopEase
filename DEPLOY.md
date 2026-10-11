@@ -1,1 +1,3 @@
-# Deployment trigger 08/20/2026 14:48:31
+# Docker deployment
+
+Use the Docker Compose procedure in [PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md).

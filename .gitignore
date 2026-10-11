@@ -2,6 +2,8 @@
 .env
 .env.*
 !.env.example
+.manus/
+.freebuff/
 
 # Python/Django runtime files
 __pycache__/
@@ -24,4 +26,8 @@ htmlcov/
 # Local exports and audit artefacts
 data/production-export.json
 data/neon_migration_fixture.json
+data/catalog_seed.json
 *.bak
+
+# Local database backups — never commit
+backups/

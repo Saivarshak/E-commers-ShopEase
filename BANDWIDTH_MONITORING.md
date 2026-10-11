@@ -1,6 +1,6 @@
 # ShopEase bandwidth monitoring
 
-Use `scripts/bandwidth_audit.py` to measure local Django response sizes without contacting Render or production PostgreSQL. The script copies the local SQLite database into a temporary isolated directory, requests representative pages and optimized images with Django’s test client, aggregates bytes by path, and can fail when configured budgets are exceeded.
+Use `scripts/bandwidth_audit.py` to measure local Django response sizes without contacting production or the production PostgreSQL database. The script copies the local SQLite database into a temporary isolated directory, requests representative pages and optimized images with Django’s test client, aggregates bytes by path, and can fail when configured budgets are exceeded.
 
 ## Basic audit
 
@@ -36,11 +36,11 @@ python scripts/bandwidth_audit.py `
   --repeat 10
 ```
 
-The test is intentionally local. It is not a Render load test and must not be pointed at the suspended production URL. Do not use it to generate high-volume traffic against a public service.
+The test is intentionally local. It is not a production load test and must not be pointed at a public production URL. Do not use it to generate high-volume traffic against a public service.
 
 ## Current baseline
 
-The initial local run after image optimization produced 18 successful responses for six paths repeated three times. The total response payload was approximately 0.307 MB. The largest individual response in that set was `static/images/shirt.webp` at approximately 29 KB per request. This baseline measures only the selected paths and does not prove the historical cause of Render’s 8.04 GB usage.
+The initial local run after image optimization produced 18 successful responses for six paths repeated three times. The total response payload was approximately 0.307 MB. The largest individual response in that set was `static/images/shirt.webp` at approximately 29 KB per request. This baseline measures only the selected paths and does not prove the historical cause of prior hosting bandwidth usage.
 
 ## Pre-push checks
 
@@ -56,4 +56,4 @@ If the local `.env` contains malformed lines or production `DATABASE_URL`, the s
 
 ## Interpretation
 
-Use the audit to detect regressions in bytes per page visit. A smaller repository or database does not automatically mean lower Render bandwidth. Compare the same route set before and after each optimization, and inspect images, HTML, JSON, static assets, repeated requests, redirects, and bots separately. Confirm live behavior with Render request logs or metrics after the workspace is available again.
+Use the audit to detect regressions in bytes per page visit. A smaller repository or database does not automatically mean lower hosting bandwidth. Compare the same route set before and after each optimization, and inspect images, HTML, JSON, static assets, repeated requests, redirects, and bots separately. Confirm live behavior with the hosting provider's request logs or metrics after deployment.

@@ -34,7 +34,12 @@
       content: "";
       position: fixed;
       top: 0; left: 0; width: 100%; height: 100%;
-      background-image: url("{% static 'images/order_success_bg.jpg' %}");
+      /* Keep this self-contained: the previous image reference did not exist
+         in the production static manifest and made successful orders return
+         a 500 page. */
+      background-image:
+        radial-gradient(circle at top right, rgba(34, 197, 94, 0.26), transparent 42%),
+        radial-gradient(circle at bottom left, rgba(16, 185, 129, 0.18), transparent 46%);
       background-size: cover;
       background-position: center;
       opacity: 0.45;

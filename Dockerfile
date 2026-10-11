@@ -20,5 +20,5 @@ RUN mkdir -p /app/media /app/staticfiles \
 COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
 
 USER django
-EXPOSE 8000
+EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

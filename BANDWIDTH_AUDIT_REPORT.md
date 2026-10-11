@@ -1,8 +1,8 @@
-# Render Bandwidth Audit and Optimization Report
+# ShopEase Bandwidth Audit and Optimization Report
 
 ## Executive Summary
 
-Your Render workspace has been suspended because your application has exceeded the **5 GB free bandwidth limit**, currently reaching **8.04 GB**. On Render’s Free tier, all HTTP responses—including HTML, scripts, and media files served through your web service—count toward this quota. 
+An earlier deployment exceeded its **5 GB bandwidth allocation**, reaching approximately **8.04 GB**. All HTTP responses—including HTML, scripts, and media files served through the web service—contributed to that total.
 
 An audit of your project repository (`Live project Online shoping`) reveals that the primary driver of this high bandwidth consumption is the **unoptimized delivery of large image assets** through a dynamic routing mechanism that explicitly disables browser caching. Each time a visitor loads your homepage or category pages, multiple multi-megabyte images are fetched afresh from your server.
 
@@ -39,7 +39,7 @@ The repository contains large backup and fixture files in the `data/` directory 
 
 ## Actionable Remediation Steps
 
-To restore your Render service and prevent future bandwidth exhaustion without immediately paying for Pro upgrades, apply the following optimizations:
+To prevent future bandwidth exhaustion on the hosting provider (without immediately paying for Pro upgrades), apply the following optimizations:
 
 ### Step 1: Compress and Convert Images to WebP
 Resize and compress all banner and category images. Convert them to the modern **WebP** format, which typically reduces file sizes by **70–80%** without noticeable loss in visual quality.
@@ -56,5 +56,5 @@ Delete heavy unused JSON backups in the `data/` folder and ensure `.gitignore` e
 
 ## Long-Term Recommendations
 
-1. **Offload Media to Cloud Storage (S3 / Cloudinary):** Move product and category images to an external object storage service or CDN (like Cloudinary or AWS S3). This entirely offloads image bandwidth from your Render web service instance.
+1. **Offload Media to Cloud Storage (S3 / Cloudinary):** Move product and category images to an external object storage service or CDN (like Cloudinary or AWS S3). This entirely offloads image bandwidth from your web service instance.
 2. **Implement Lazy Loading:** Ensure all below-the-fold product and category images use HTML native lazy loading (`loading="lazy"`).

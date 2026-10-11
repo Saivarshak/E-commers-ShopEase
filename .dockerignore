@@ -4,6 +4,8 @@
 .env
 .env.*
 !.env.example
+.manus/
+.freebuff/
 
 # Python and Django runtime output
 __pycache__/
@@ -22,6 +24,10 @@ htmlcov/
 media/
 staticfiles/
 backup/
+# Only the reviewed, credential-free catalog fixture is part of the image.
+# Local exports and ad-hoc fixtures can contain operational or customer data.
+data/*
+!data/production_catalog_seed.json
 
 # Local exports, diagnostics, and audit artefacts that do not belong in a
 # deployable application image.
@@ -44,3 +50,4 @@ local-image-audit.*
 local-bandwidth-errors.txt
 tmp_audit_images.*
 webp-bandwidth-report.csv
+.tmp_*

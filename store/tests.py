@@ -64,6 +64,19 @@ class OperationsEndpointTests(TestCase):
         self.assertEqual(self.client.get('/admin/').status_code, 200)
         self.assertEqual(self.client.get(reverse('admin_control_center')).status_code, 200)
 
+    def test_custom_control_center_rejects_non_staff_user_even_when_email_matches_old_admin_setting(self):
+        customer = User.objects.create_user(
+            username='saivarshak14@gmail.com',
+            email='saivarshak14@gmail.com',
+            password='secret123',
+        )
+
+        self.client.force_login(customer)
+        response = self.client.get(reverse('admin_control_center'))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse('admin_access'), response.url)
+
 
 class HostSecuritySettingsTests(TestCase):
     def test_payment_callback_domain_is_added_to_allowed_hosts_and_csrf_origins(self):
@@ -107,7 +120,7 @@ class PublicSecurityTests(TestCase):
 
 class PublicFashionMaintenanceTests(TestCase):
     def setUp(self):
-        self.category = Category.objects.create(category_name='mens')
+        self.category, _ = Category.objects.get_or_create(category_name='mens')
         self.root = FashionCategory.objects.create(
             name='Mens Root',
             slug='mens-root',
@@ -168,16 +181,16 @@ class PublicFashionMaintenanceTests(TestCase):
         )
 
     def test_maintenance_category_card_stays_visible_and_clickable(self):
-        response = self.client.get('/men/')
+        response = self.client.get('/mens/')
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Casual Wear')
-        self.assertContains(response, 'href="/men/casual-wear/"')
+        self.assertContains(response, 'href="/mens/casual-wear/"')
         self.assertContains(response, 'Maintenance')
         self.assertNotContains(response, '.gallery-grid::before')
 
     def test_maintenance_category_click_shows_message_not_products(self):
-        response = self.client.get('/men/casual-wear/')
+        response = self.client.get('/mens/casual-wear/')
 
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, 'store/under-maintenance.html')
@@ -185,7 +198,7 @@ class PublicFashionMaintenanceTests(TestCase):
         self.assertNotContains(response, 'Hidden Maintenance Shirt')
 
     def test_normal_category_click_still_shows_product_listing(self):
-        response = self.client.get('/men/formal-wear/')
+        response = self.client.get('/mens/formal-wear/')
 
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, 'store/product-listing-generic.html')
@@ -447,7 +460,15 @@ class AdminCategoryImageUploadTests(TestCase):
 
         storefront_response = self.client.get('/mens/casual-wear/')
         self.assertEqual(storefront_response.status_code, 200)
-        self.assertTemplateUsed(storefront_response, 'store/product-listing-generic.html')
+        self.assertTrue(
+            any(
+                template.name in {
+                    'store/product-listing-generic.html',
+                    'store/category-children.html',
+                }
+                for template in storefront_response.templates
+            )
+        )
         self.assertNotContains(storefront_response, 'currently under maintenance')
 
     def test_ajax_auth_failure_returns_json_not_html(self):

@@ -4,14 +4,14 @@
 
 An exhaustive technical audit of the **ShopEase** e-commerce project was conducted to address issues regarding Men's category card ordering, image mapping, and persistence across page refreshes, Django server restarts, and application redeployments. 
 
-Through rigorous inspection of Django models (`FashionCategory`), management commands (`sync_mens_gallery`), views (`category_view`, `_build_fashion_category_cards`), and deployment specifications (`render.yaml`), the root cause of card resets and inconsistencies was successfully identified and permanently resolved. All administrator modifications made through the `/admin` control panel are now fully database-backed and persist reliably across all reload and restart cycles.
+Through rigorous inspection of Django models (`FashionCategory`), management commands (`sync_mens_gallery`), views (`category_view`, `_build_fashion_category_cards`), and legacy deployment specifications, the root cause of card resets and inconsistencies was successfully identified and permanently resolved. All administrator modifications made through the `/admin` control panel are now fully database-backed and persist reliably across all reload and restart cycles.
 
 ---
 
 ## 1. Root Cause Analysis
 
 Prior to this fix, the Men's category section experienced intermittent resets and duplicate entries due to the following architectural factors:
-1. **Hardcoded Management Commands & Build Hooks**: The management command `sync_mens_gallery` defined a hardcoded list of 20 categories with outdated sort orders and image mappings. Because Render build configurations (`render.yaml`) executed `python manage.py sync_mens_gallery` upon deployment, database records were routinely overwritten or appended with duplicate entries.
+1. **Hardcoded Management Commands & Build Hooks**: The management command `sync_mens_gallery` defined a hardcoded list of 20 categories with outdated sort orders and image mappings. Because a legacy build configuration executed `python manage.py sync_mens_gallery` during deployment, database records were routinely overwritten or appended with duplicate entries.
 2. **Obsolete Duplicate Records**: Over successive migrations and testing sessions, legacy duplicate category cards (such as alternative spellings for wedding wear, traditional wear, and accessories) accumulated in the database (`fashion_categories` table), leading to sorting collisions.
 3. **Persistence Assurance**: By ensuring that `/admin` directly updates the `FashionCategory` records in the active database (`db.sqlite3` / PostgreSQL) and cleaning up conflicting initialization routines, administrator changes are now permanently preserved as the single source of truth.
 

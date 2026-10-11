@@ -1,56 +1,75 @@
+# ShopEase production stack: Caddy (HTTPS) -> web (Django/Gunicorn) -> db (PostgreSQL).
+# All site-specific values (domain, secrets, database credentials) come from an
+# explicitly selected, untracked environment file.  Do not fall back to the
+# developer `.env`: it is intentionally not a Docker production configuration.
+#
+# Production example (PowerShell):
+#   $env:ENV_FILE = 'C:\secure\shopease.production.env'
+#   docker compose --env-file $env:ENV_FILE up -d --build
+#
+# Local TLS smoke test:
+#   $env:ENV_FILE = '.env.localtest'
+#   docker compose --env-file $env:ENV_FILE up -d --build
+
 services:
   web:
     build:
       context: .
       dockerfile: Dockerfile
-    env_file: .env
+    env_file:
+      - ${ENV_FILE:-.env.production}
     environment:
+      # Container-only overrides: compose always runs production mode.
       DJANGO_ENV: production
       IS_PRODUCTION: "true"
       DEBUG: "false"
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in the selected environment file}
+      APP_BASE_URL: ${APP_BASE_URL:?Set APP_BASE_URL in the selected environment file}
+      PAYMENT_CALLBACK_BASE_URL: ${PAYMENT_CALLBACK_BASE_URL:?Set PAYMENT_CALLBACK_BASE_URL in the selected environment file}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:?Set ALLOWED_HOSTS in the selected environment file}
+      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:?Set CSRF_TRUSTED_ORIGINS in the selected environment file}
+      # This Compose topology always uses its private PostgreSQL service.  An
+      # external DATABASE_URL must not silently bypass the persistent db volume.
       DATABASE_URL: ""
-      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
-      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in the selected environment file}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in the selected environment file}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the selected environment file}
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
-      DATABASE_SSL_REQUIRE: "false"
-      APP_BASE_URL: http://localhost:${WEB_PORT:-8000}
-      PAYMENT_CALLBACK_BASE_URL: http://localhost:${WEB_PORT:-8000}
-      ALLOWED_HOSTS: localhost,127.0.0.1
-      CSRF_TRUSTED_ORIGINS: http://localhost:${WEB_PORT:-8000},http://127.0.0.1:${WEB_PORT:-8000}
-      CORS_ALLOWED_ORIGINS: http://localhost:${WEB_PORT:-8000},http://127.0.0.1:${WEB_PORT:-8000}
-      TRUST_X_FORWARDED_PROTO: "false"
-      USE_X_FORWARDED_HOST: "false"
-      SECURE_SSL_REDIRECT: "false"
-      SESSION_COOKIE_SECURE: "false"
-      CSRF_COOKIE_SECURE: "false"
-      SECURE_HSTS_SECONDS: "0"
-      SECURE_HSTS_INCLUDE_SUBDOMAINS: "false"
-      SECURE_HSTS_PRELOAD: "false"
-      RUN_MIGRATIONS: "true"
-      COLLECT_STATIC: "true"
-    ports:
-      - "${WEB_PORT:-8000}:8000"
+      DB_HOST: db
+      DB_PORT: "5432"
+      PORT: "8080"
+      TRUST_X_FORWARDED_PROTO: "true"
+      USE_X_FORWARDED_HOST: "true"
+    expose:
+      - "8080"
     depends_on:
       db:
         condition: service_healthy
     volumes:
       - media_data:/app/media
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/', timeout=3).read()"]
+      # Hits the app through the service DNS name with the public Host header,
+      # so production host validation and SSL redirect behaviour are exercised.
+      test:
+        - CMD
+        - python
+        - -c
+        - 'import os, urllib.request as u; from urllib.parse import urlparse as p; host = (p(os.environ.get("APP_BASE_URL", "")).hostname or "web"); req = u.Request("http://web:8080/health/", headers={"Host": host, "X-Forwarded-Proto": "https"}); u.urlopen(req, timeout=3).read()'
       interval: 10s
       timeout: 5s
       retries: 6
-      start_period: 20s
+      start_period: 40s
     restart: unless-stopped
 
   db:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
-      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      # Kept explicit so `docker compose config` rejects an incomplete
+      # deployment before PostgreSQL can initialize an accidental database.
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in the selected environment file}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in the selected environment file}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the selected environment file}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -61,6 +80,32 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      CADDY_SITE: ${CADDY_SITE:?Set CADDY_SITE in the selected environment file}
+    depends_on:
+      web:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    healthcheck:
+      # Check Caddy's HTTPS listener locally.  The dependent web service is
+      # separately health-checked through Django and PostgreSQL.
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 443"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   media_data:
+  caddy_data:
+  caddy_config:

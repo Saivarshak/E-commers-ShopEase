@@ -135,23 +135,6 @@
             margin-inline: auto;
         }
 
-        /*
-         * Keep the stronger backdrop blur confined to the exact card-grid box.
-         * Because this layer is absolutely positioned, it cannot add height,
-         * width, spacing, or scrollable overflow outside the cards.
-         */
-        .gallery-grid::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            z-index: -1;
-            border-radius: 1.25rem;
-            background: rgba(255, 255, 255, 0.14);
-            backdrop-filter: blur(44px) saturate(1.2);
-            -webkit-backdrop-filter: blur(44px) saturate(1.2);
-            pointer-events: none;
-        }
-
         .gallery-card {
             width: clamp(200px, 18vw, 280px);
             max-width: 100%;

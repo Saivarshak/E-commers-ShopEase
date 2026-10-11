@@ -2,7 +2,7 @@
 
 ## Executive summary
 
-The read-only inventory found **167 image files** totaling **2.639 MB** across the repository. This is stored file size, not Render bandwidth. The audit found **119 unique content hashes**, with approximately **0.319 MB** of duplicate storage caused by copied files and collected static artifacts.
+The read-only inventory found **167 image files** totaling **2.639 MB** across the repository. This is stored file size, not serving bandwidth. The audit found **119 unique content hashes**, with approximately **0.319 MB** of duplicate storage caused by copied files and collected static artifacts.
 
 | Measure | Result |
 |---|---:|
@@ -102,5 +102,5 @@ The route-aware audit should be used together with this inventory because a file
 
 First, update every public template that still references a raster file when a verified WebP derivative exists. Second, generate derivatives for the remaining large static JPEG/PNG files while preserving originals. Third, remove duplicate collected/static copies only through the normal `collectstatic` build process rather than deleting source assets manually. Fourth, fix missing image references and add `srcset`/`sizes` for responsive delivery. Finally, run the route-aware audit with `--fail-on-http-error` and a fixed route set before each push.
 
-Do not treat the 2.639 MB repository image total as an estimate of the historical Render 8.04 GB bandwidth. Render bandwidth depends on request volume multiplied by response bytes, including repeated downloads, bots, and dynamic database-backed media.
+Do not treat the 2.639 MB repository image total as an estimate of historical production bandwidth usage. Serving bandwidth depends on request volume multiplied by response bytes, including repeated downloads, bots, and dynamic database-backed media.
 

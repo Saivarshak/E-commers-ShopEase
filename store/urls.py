@@ -29,7 +29,7 @@ urlpatterns = [
         'men/',
         views.category_view,
         {'category_name': 'mens'},
-        name='men_root_legacy'
+        name='men_root'
     ),
 
     path(

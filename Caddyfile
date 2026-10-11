@@ -1,0 +1,15 @@
+# ShopEase edge proxy. The public site address comes from the CADDY_SITE env
+# var (e.g. shop.example.com, or "example.com, www.example.com"). Caddy obtains
+# and renews Let's Encrypt certificates automatically when ports 80/443 are
+# reachable and DNS points at this host.
+{$CADDY_SITE} {
+	encode zstd gzip
+
+	# Forward everything to the Django/Gunicorn container.
+	reverse_proxy web:8080
+
+	# Never leak server information.
+	header {
+		-Server
+	}
+}

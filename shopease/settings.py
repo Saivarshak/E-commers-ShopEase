@@ -27,8 +27,11 @@ def _env_list(name, default=""):
 
 def _build_host_security_settings():
     """Build host and CSRF allowlists from the public callback URL too."""
-    default_hosts = "" if IS_PRODUCTION else "localhost,127.0.0.1,testserver"
-    allowed_hosts = _env_list("ALLOWED_HOSTS", default_hosts)
+    # Hosts come exclusively from the environment (ALLOWED_HOSTS plus the
+    # APP_BASE_URL / PAYMENT_CALLBACK_BASE_URL hostnames). Production must be
+    # configured explicitly; development relies on Django's DEBUG-time
+    # localhost allowance, and the test runner always appends "testserver".
+    allowed_hosts = _env_list("ALLOWED_HOSTS", "")
     trusted_origins = _env_list("CSRF_TRUSTED_ORIGINS", "")
     for raw_url in (os.environ.get("APP_BASE_URL", ""), os.environ.get("PAYMENT_CALLBACK_BASE_URL", "")):
         parsed = urlparse(raw_url.strip())
@@ -61,12 +64,6 @@ if not SECRET_KEY:
 
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "").strip().rstrip("/")
 ALLOWED_HOSTS, CSRF_TRUSTED_ORIGINS = _build_host_security_settings()
-for platform_host in (
-    os.environ.get("RENDER_EXTERNAL_HOSTNAME", "").strip(),
-    os.environ.get("KOYEB_PUBLIC_DOMAIN", "").strip(),
-):
-    if platform_host and platform_host not in ALLOWED_HOSTS:
-        ALLOWED_HOSTS.append(platform_host)
 _default_trusted_origins = APP_BASE_URL if APP_BASE_URL.startswith("https://") else ""
 if _default_trusted_origins and _default_trusted_origins not in CSRF_TRUSTED_ORIGINS:
     CSRF_TRUSTED_ORIGINS.append(_default_trusted_origins)
@@ -112,8 +109,11 @@ TEMPLATES = [{
 WSGI_APPLICATION = "shopease.wsgi.application"
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
-DB_CONN_MAX_AGE = int(os.environ.get("DB_CONN_MAX_AGE", "600"))
-DATABASE_SSL_REQUIRE = _env_bool("DATABASE_SSL_REQUIRE", False)
+# Serverless containers can scale horizontally.  Closing a connection at the
+# end of a request is the safe default for Supabase's shared pooler; a
+# persistent host may opt in to a longer lifetime explicitly.
+DB_CONN_MAX_AGE = int(os.environ.get("DB_CONN_MAX_AGE", "0" if IS_PRODUCTION else "600"))
+DATABASE_SSL_REQUIRE = _env_bool("DATABASE_SSL_REQUIRE", IS_PRODUCTION)
 
 if DATABASE_URL:
     DATABASES = {
@@ -135,7 +135,7 @@ elif any(os.environ.get(name, "").strip() for name in ("POSTGRES_DB", "DB_NAME")
             "NAME": os.environ.get("POSTGRES_DB", os.environ.get("DB_NAME", "")),
             "USER": os.environ.get("POSTGRES_USER", os.environ.get("DB_USER", "")),
             "PASSWORD": os.environ.get("POSTGRES_PASSWORD", os.environ.get("DB_PASSWORD", "")),
-            "HOST": os.environ.get("POSTGRES_HOST", os.environ.get("DB_HOST", "localhost")),
+            "HOST": os.environ.get("POSTGRES_HOST", os.environ.get("DB_HOST", "")),
             "PORT": os.environ.get("POSTGRES_PORT", os.environ.get("DB_PORT", "5432")),
             "CONN_MAX_AGE": DB_CONN_MAX_AGE,
             "CONN_HEALTH_CHECKS": True,
@@ -259,8 +259,7 @@ EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
 EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = _env_bool("EMAIL_USE_TLS", True)
-DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@localhost")
-SHOP_ADMIN_EMAIL = os.environ.get("SHOP_ADMIN_EMAIL", "")
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@shopease.example.com")
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO" if IS_PRODUCTION else "DEBUG")
 LOGGING = {

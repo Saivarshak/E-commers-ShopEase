@@ -1,2 +1,2 @@
-# Keep Docker, Render, and local installs on one pinned dependency set.
+# Keep Docker, cloud, and local installs on one pinned dependency set.
 -r requirements.txt

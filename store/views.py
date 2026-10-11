@@ -630,7 +630,7 @@ def _finalize_paid_order(order, request=None, payment_method='Razorpay Payment L
 
     order.payment_method = payment_method
     order.payment_status = payment_status
-    order.status = 'Payment Confirmed'
+    order.status = 'Placed'
     if payment_id:
         order.razorpay_payment_id = payment_id
     order.save(update_fields=['payment_method', 'payment_status', 'status', 'razorpay_payment_id'])
@@ -1044,12 +1044,19 @@ def _parse_quantity(raw_value, default=1):
 
 def _build_category_tree():
     try:
+        preferred_root_ids = [
+            category.category_id
+            for category in (
+                _preferred_root_category(root_name)
+                for root_name in ('mens', 'womens', 'kids', 'accessories')
+            )
+            if category is not None
+        ]
         categories = list(
-            FashionCategory.objects.filter(is_active=True)
-            # Ignore the obsolete lower-case category roots retained only for
-            # historical data. Their URLs overlap the current title-case
-            # hierarchy and can otherwise create stale navigation links.
-            .exclude(root_category__category_name__in=['mens', 'womens', 'kids'])
+            FashionCategory.objects.filter(
+                _public_fashion_category_filter(),
+                root_category_id__in=preferred_root_ids,
+            )
             .select_related('parent', 'root_category')
             .order_by('level', 'sort_order', 'fashion_category_id')
         )
@@ -1376,7 +1383,12 @@ def home(request):
     categories = Category.objects.order_by('category_id')
     categories_context = []
     home_content = None
-    products = Product.objects.none()
+    products = (
+        Product.objects.filter(is_active=True)
+        .select_related('category', 'subcategory', 'fashion_category')
+        .prefetch_related('productvariant_set')
+        .order_by('-is_featured', '-product_id')[:12]
+    )
 
     try:
         home_content = HomeContent.objects.filter(is_active=True).first()
@@ -3172,16 +3184,17 @@ def orders(request):
     })
 
 
-SHOP_ADMIN_EMAIL = (getattr(settings, 'SHOP_ADMIN_EMAIL', '') or 'saivarshak14@gmail.com').strip()
-
-
 def _is_allowed_admin_user(user):
-    if not user or not user.is_authenticated:
-        return False
+    """Restrict the ShopEase control centre to Django administrative users.
 
-    configured_email = SHOP_ADMIN_EMAIL.lower()
-    user_email = (user.email or '').strip().lower()
-    return bool(user.is_staff or user.is_superuser or (configured_email and user_email == configured_email))
+    Authorizing a customer because their supplied email matches a setting is
+    unsafe: registration accepts arbitrary email addresses and an email is not
+    an authorization boundary.  Keep the custom control centre aligned with
+    Django's built-in admin instead.
+    """
+    if not user or not user.is_authenticated or not user.is_active:
+        return False
+    return bool(user.is_staff or user.is_superuser)
 
 
 def _find_admin_user(identifier):
@@ -3225,7 +3238,7 @@ def admin_access(request):
         user = _find_admin_user(admin_identifier)
 
         if user is None:
-            messages.error(request, 'Use a staff, superuser, or configured admin account to access this panel.')
+            messages.error(request, 'Use a staff or superuser account to access this panel.')
         else:
             authenticated_user = authenticate(request, username=user.username, password=password)
             if authenticated_user is None:
@@ -3238,7 +3251,6 @@ def admin_access(request):
 
     return render(request, 'store/admin-login.html', {
         'next_url': next_url,
-        'admin_email': SHOP_ADMIN_EMAIL,
         'admin_identifier': submitted_identifier,
         'logo_image': _get_site_asset('logo', 'images/logo1.webp'),
     })

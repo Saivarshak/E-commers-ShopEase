@@ -28,7 +28,7 @@ very_large=[r for r in rows if r['bytes'] >= 250*1024]
 report=[]
 report.append('# ShopEase Comprehensive Image Bandwidth Audit\n')
 report.append('## Executive summary\n')
-report.append(f"The read-only inventory found **{summary['image_count']} image files** totaling **{summary['total_mb']:.3f} MB** across the repository. This is stored file size, not Render bandwidth. The audit found **{len(groups)} unique content hashes**, with approximately **{duplicate_overhead/1024/1024:.3f} MB** of duplicate storage caused by copied files and collected static artifacts.\n")
+report.append(f"The read-only inventory found **{summary['image_count']} image files** totaling **{summary['total_mb']:.3f} MB** across the repository. This is stored file size, not serving bandwidth. The audit found **{len(groups)} unique content hashes**, with approximately **{duplicate_overhead/1024/1024:.3f} MB** of duplicate storage caused by copied files and collected static artifacts.\n")
 report.append('| Measure | Result |')
 report.append('|---|---:|')
 report.append(f"| Total image files | {summary['image_count']} |")
@@ -63,6 +63,6 @@ report.append('| Missing placeholder | `/assets/images/placeholder.svg` returned
 report.append('| Local dotenv warning | The project `.env` contains a malformed line and emits parse warnings | Fix separately; do not expose or commit secrets |')
 report.append('\n## Recommended order of work\n')
 report.append('First, update every public template that still references a raster file when a verified WebP derivative exists. Second, generate derivatives for the remaining large static JPEG/PNG files while preserving originals. Third, remove duplicate collected/static copies only through the normal `collectstatic` build process rather than deleting source assets manually. Fourth, fix missing image references and add `srcset`/`sizes` for responsive delivery. Finally, run the route-aware audit with `--fail-on-http-error` and a fixed route set before each push.\n')
-report.append('Do not treat the 2.639 MB repository image total as an estimate of the historical Render 8.04 GB bandwidth. Render bandwidth depends on request volume multiplied by response bytes, including repeated downloads, bots, and dynamic database-backed media.\n')
+report.append('Do not treat the 2.639 MB repository image total as an estimate of historical production bandwidth usage. Serving bandwidth depends on request volume multiplied by response bytes, including repeated downloads, bots, and dynamic database-backed media.\n')
 (ROOT/'IMAGE_BANDWIDTH_AUDIT.md').write_text('\n'.join(report)+'\n', encoding='utf-8')
 print('\n'.join(report[:30]))
