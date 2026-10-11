@@ -60,4 +60,18 @@ class ProductionSecurityHeadersMiddleware:
         response.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
         response.setdefault("X-DNS-Prefetch-Control", "off")
         response.setdefault("Cross-Origin-Resource-Policy", "same-site")
+        # TLS-terminating edges that do not forward X-Forwarded-Proto (e.g.
+        # Cloudflare in front of SnapDeploy) leave Django convinced the request
+        # arrived over plain HTTP, so SecurityMiddleware never adds HSTS.
+        # Browsers ignore Strict-Transport-Security on responses delivered over
+        # HTTP, so emitting it unconditionally is safe and restores HSTS on the
+        # HTTPS responses that actually carry it.
+        hsts_seconds = int(getattr(settings, "SECURE_HSTS_SECONDS", 0) or 0)
+        if hsts_seconds > 0 and not response.has_header("Strict-Transport-Security"):
+            value = f"max-age={hsts_seconds}"
+            if getattr(settings, "SECURE_HSTS_INCLUDE_SUBDOMAINS", False):
+                value += "; includeSubDomains"
+            if getattr(settings, "SECURE_HSTS_PRELOAD", False):
+                value += "; preload"
+            response["Strict-Transport-Security"] = value
         return response
