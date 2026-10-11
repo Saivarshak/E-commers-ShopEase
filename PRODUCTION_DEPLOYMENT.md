@@ -110,3 +110,20 @@ docker compose --env-file $env:ENV_FILE exec web python manage.py check --deploy
 - PostgreSQL is reachable only over the Compose network.
 - Caddy handles HTTPS; Django receives the forwarded HTTPS headers and uses secure session/CSRF cookies.
 - The setup has no provider-specific service, manifest, URL, webhook, environment variable, or runtime dependency.
+
+## Live deployment (SnapDeploy + Supabase)
+
+- Live URL: https://shopease.containers.snapdeploy.app (HTTPS certificate issued by the platform on first deploy)
+- Backend/API: same origin under `/api/` (e.g. `/api/products/`)
+- App host: SnapDeploy free tier — the GitHub repository is built from the
+  `Dockerfile` on branch `codex/production-deployment`; environment variables
+  live in the SnapDeploy dashboard, never in Git.
+- Database: Supabase PostgreSQL 17 (pooled IPv4 endpoint, `sslmode=require`),
+  seeded from `backups/` (which is git-ignored).
+- The container sleeps after ~15 idle minutes; a browser visit wakes it in
+  about a minute (the API `wake` endpoint does the same for scripts).
+- SnapDeploy's edge terminates TLS but does not forward `X-Forwarded-Proto`,
+  so `SECURE_SSL_REDIRECT` stays off (the platform health-checks over plain
+  HTTP with `Host: localhost`) and HSTS is emitted by
+  `store.middleware.ProductionSecurityHeadersMiddleware` instead.
+- Deploy limit: 5 deploys per rolling 12 hours on the free tier.
