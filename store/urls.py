@@ -190,5 +190,8 @@ path(
 
 urlpatterns += [
     path('health/', views.health_check, name='health_check'),
+    # Container platforms (SnapDeploy/ECS) probe the app with Host localhost
+    # on this exact path; without it the target is marked unhealthy.
+    path('api/health', views.health_check, name='api_health_check'),
     path('under-maintenance/', views.under_maintenance_view, name='under_maintenance_view'),
 ]
