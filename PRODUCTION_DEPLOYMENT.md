@@ -127,3 +127,4 @@ docker compose --env-file $env:ENV_FILE exec web python manage.py check --deploy
   HTTP with `Host: localhost`) and HSTS is emitted by
   `store.middleware.ProductionSecurityHeadersMiddleware` instead.
 - Deploy limit: 5 deploys per rolling 12 hours on the free tier.
+- Push-based auto-deploy re-verified on 2026-10-12 (quota reset): legacy catalog redirects fixed (they pointed at `/men/` and `/women/`, which are not URL patterns, and returned 404).

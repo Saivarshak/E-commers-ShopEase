@@ -1984,7 +1984,7 @@ def product_detail(request, product_id):
 
 
 def mens_tshirts(request):
-    return redirect('/men/casual-wear/t-shirts/', permanent=True)
+    return redirect('/mens/casual-wear/t-shirts/', permanent=True)
     products = Product.objects.filter(
         category__category_name__iexact='mens',
         subcategory__subcategory_name__iexact='t-shirts',
@@ -2045,7 +2045,7 @@ def mens_tshirt_detail(request, product_id):
 
 
 def mens_jeans(request):
-    return redirect('/men/casual-wear/jeans/', permanent=True)
+    return redirect('/mens/casual-wear/jeans/', permanent=True)
     products = Product.objects.filter(
         category__category_name__iexact='mens',
         subcategory__subcategory_name__iexact='jeans',
@@ -2106,7 +2106,7 @@ def mens_jeans_detail(request, product_id):
 
 
 def accessories_men(request):
-    return redirect('/men/accessories/', permanent=True)
+    return redirect('/mens/accessories/', permanent=True)
     products = Product.objects.filter(
         category__category_name__iexact='mens',
         subcategory__subcategory_name__icontains='accessor',
@@ -2122,7 +2122,7 @@ def accessories_men(request):
 
 
 def accessories_women(request):
-    return redirect('/women/accessories/', permanent=True)
+    return redirect('/womens/accessories/', permanent=True)
     products = Product.objects.filter(
         category__category_name__iexact='womens',
         is_active=True,
@@ -2140,7 +2140,7 @@ def accessories_women(request):
 
 
 def womens_ethnicware(request):
-    return redirect('/women/casual-wear/', permanent=True)
+    return redirect('/womens/casual-wear/', permanent=True)
     products = Product.objects.filter(
         category__category_name__iexact='womens',
         subcategory__subcategory_name__iexact='ethnic wear',
@@ -2159,7 +2159,7 @@ def womens_ethnicware(request):
 
 
 def womens_westernware(request):
-    return redirect('/women/casual-wear/', permanent=True)
+    return redirect('/womens/casual-wear/', permanent=True)
     products = Product.objects.filter(
         category__category_name__iexact='womens',
         subcategory__subcategory_name__iexact='western wear',
@@ -2178,7 +2178,7 @@ def womens_westernware(request):
 
 
 def womens_footwear(request):
-    return redirect('/women/footwear/', permanent=True)
+    return redirect('/womens/footwear/', permanent=True)
     products = Product.objects.filter(
         category__category_name__iexact='womens',
         subcategory__subcategory_name__iexact='footwear',

@@ -852,3 +852,29 @@ class RazorpayFlowTests(TestCase):
         self.assertEqual(order.payment_status, 'Created')
         self.assertEqual(order.status, 'Pending Payment')
         self.assertEqual(self.variant.quantity, 6)
+
+
+class LegacyCatalogRedirectTests(TestCase):
+    """Legacy catalog URLs must land on live category pages instead of 404."""
+
+    LEGACY_URLS = {
+        '/mens_tshirts/': '/mens/casual-wear/t-shirts/',
+        '/mens_jeans/': '/mens/casual-wear/jeans/',
+        '/accessories_men/': '/mens/accessories/',
+        '/accessories_women/': '/womens/accessories/',
+        '/womens_ethnicware/': '/womens/casual-wear/',
+        '/womens_westernware/': '/womens/casual-wear/',
+        '/womens_footwear/': '/womens/footwear/',
+        '/kids_tshirts/': '/kids/casual-wear/t-shirts/',
+        '/kids_footwear/': '/kids/footwear/',
+    }
+
+    def test_legacy_urls_redirect_to_live_category_pages(self):
+        for legacy, canonical in self.LEGACY_URLS.items():
+            with self.subTest(legacy=legacy):
+                self.assertRedirects(
+                    self.client.get(legacy),
+                    canonical,
+                    status_code=301,
+                    target_status_code=200,
+                )
