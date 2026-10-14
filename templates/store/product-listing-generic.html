@@ -47,7 +47,8 @@
       border-radius: 25px; text-decoration: none; transition: background 0.3s ease; display: inline-block;
     }
     .btn:hover { background: linear-gradient(to right, #ec4899, #f97316); }
-    .logo { height: 100px; width: 100px; }
+    /* height-driven box: keeps any brand-logo aspect ratio undistorted */
+    .logo { height: 100px; width: auto; max-width: 100%; object-fit: contain; }
     .empty-copy { color: #4b5563; margin-top: 6px; }
     @media (max-width: 620px) { body { padding: 12px; } header h1 { font-size: 1.8rem; } }
   </style>

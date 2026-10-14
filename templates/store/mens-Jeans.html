@@ -105,9 +105,12 @@
       background: linear-gradient(to right, #ec4899, #f97316);
     }
 
+    /* height-driven box: keeps any brand-logo aspect ratio undistorted */
     .logo {
       height: 100px;
-      width: 100px;
+      width: auto;
+      max-width: 100%;
+      object-fit: contain;
     }
   </style>
   <link rel="stylesheet" href="{% static 'css/shopease-theme.css' %}">
