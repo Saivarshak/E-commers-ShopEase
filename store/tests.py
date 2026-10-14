@@ -810,3 +810,53 @@ class RazorpayFlowTests(TestCase):
         self.assertEqual(order.payment_status, 'Created')
         self.assertEqual(order.status, 'Pending Payment')
         self.assertEqual(self.variant.quantity, 6)
+
+
+class DuplicateCategoryNameTests(TestCase):
+    """The catalog seed contains both "Mens" and "mens" (and Womens/Kids).
+
+    A name-based ``get()`` raised MultipleObjectsReturned, which turned the
+    category pages into 500s, so these lookups must tolerate duplicate
+    case-variant rows instead of assuming uniqueness.
+    """
+
+    def setUp(self):
+        for name in ('mens', 'womens', 'kids'):
+            Category.objects.get_or_create(category_name=name)
+            Category.objects.create(category_name=name.capitalize())
+
+    def test_duplicate_case_variant_categories_exist(self):
+        for name in ('mens', 'womens', 'kids'):
+            with self.subTest(name=name):
+                self.assertEqual(
+                    Category.objects.filter(category_name__iexact=name).count(),
+                    2,
+                )
+
+    def test_category_view_does_not_500_on_duplicate_names(self):
+        response = self.client.get('/mens/')
+        self.assertNotEqual(response.status_code, 500)
+
+    def test_fashion_category_path_does_not_500_on_duplicate_names(self):
+        for path in ('/mens/accessories/', '/womens/ethnicwear/', '/kids/accessories/'):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertNotEqual(response.status_code, 500)
+
+    def test_preferred_category_picks_lowest_id(self):
+        from store.views import _preferred_category_by_name
+
+        expected = (
+            Category.objects.filter(category_name__iexact='mens')
+            .order_by('category_id')
+            .first()
+        )
+        self.assertEqual(
+            _preferred_category_by_name('mens').category_id, expected.category_id
+        )
+
+    def test_preferred_category_returns_none_for_unknown_name(self):
+        from store.views import _preferred_category_by_name
+
+        self.assertIsNone(_preferred_category_by_name('definitely-not-a-category'))
+        self.assertIsNone(_preferred_category_by_name(''))

@@ -1611,10 +1611,9 @@ def category_view(request, category_name):
             category_id=category_id,
         )
     else:
-        category = get_object_or_404(
-            Category,
-            category_name__iexact=normalized,
-        )
+        category = _preferred_category_by_name(normalized)
+        if category is None:
+            raise Http404('Category not found.')
 
     products = (
         Product.objects.filter(category=category, is_active=True)
@@ -1755,6 +1754,22 @@ def _get_descendant_category_ids(fashion_category):
     return descendant_ids
 
 
+def _preferred_category_by_name(name):
+    """Return one Category for a case-insensitive name, tolerating duplicates.
+
+    The catalog seed contains both "Mens" and "mens" (and likewise Womens/Kids),
+    so `get()`/`get_object_or_404()` on the name raises MultipleObjectsReturned and
+    turns the page into a 500. Prefer the active row with the lowest id.
+    """
+    if not name:
+        return None
+    return (
+        Category.objects.filter(category_name__iexact=name)
+        .order_by('category_id')
+        .first()
+    )
+
+
 def _resolve_fashion_category_by_path(gender_slug, category_path):
     root_lookup = {
     'men': 'mens',       # optional legacy support
@@ -1768,7 +1783,9 @@ def _resolve_fashion_category_by_path(gender_slug, category_path):
     if not root_category_name:
         raise Http404('Category not found.')
 
-    root_category = get_object_or_404(Category, category_name__iexact=root_category_name)
+    root_category = _preferred_category_by_name(root_category_name)
+    if root_category is None:
+        raise Http404('Category not found.')
     current = FashionCategory.objects.filter(
         _public_fashion_category_filter(),
         root_category=root_category,
