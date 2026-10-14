@@ -18,7 +18,8 @@ services:
       pip install -r requirements.txt &&
       python manage.py collectstatic --noinput &&
       python manage.py migrate --noinput &&
-      python manage.py bootstrap_catalog
+      python manage.py bootstrap_catalog &&
+      if [ "$CREATE_SUPERUSER" = "true" ]; then python manage.py ensure_superuser; fi
 
     startCommand: >-
       gunicorn shopease.wsgi:application --workers 2 --threads 4
@@ -36,6 +37,18 @@ services:
         value: "true"
       - key: SECRET_KEY
         generateValue: true
+      # Administrator recovery. ensure_superuser only changes the password when
+      # RESET_SUPERUSER_PASSWORD is true, so redeploys keep the current one.
+      - key: CREATE_SUPERUSER
+        value: "false"
+      - key: DJANGO_SUPERUSER_USERNAME
+        sync: false
+      - key: DJANGO_SUPERUSER_EMAIL
+        sync: false
+      - key: DJANGO_SUPERUSER_PASSWORD
+        sync: false
+      - key: RESET_SUPERUSER_PASSWORD
+        value: "false"
       # Set these in the Render dashboard (or with `sync: false` prompts).
       - key: DATABASE_URL
         sync: false
