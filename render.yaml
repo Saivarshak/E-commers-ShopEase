@@ -1,0 +1,63 @@
+# Free-tier Render blueprint for the complete ShopEase project.
+#
+# One free web service runs the whole application: Django renders the frontend
+# and WhiteNoise serves the images, so no separate static host is needed. The
+# database is deliberately external (a free Neon/Supabase/Aiven Postgres) and is
+# supplied through DATABASE_URL, because Render's own free PostgreSQL instance
+# expires 30 days after creation.
+#
+# `bootstrap_catalog` seeds a brand-new database and is a no-op once products
+# exist, so it is safe to keep in every build.
+services:
+  - type: web
+    name: shopease
+    runtime: python
+    plan: free
+
+    buildCommand: >-
+      pip install -r requirements.txt &&
+      python manage.py collectstatic --noinput &&
+      python manage.py migrate --noinput &&
+      python manage.py bootstrap_catalog
+
+    startCommand: >-
+      gunicorn shopease.wsgi:application --workers 2 --threads 4
+      --timeout 120 --access-logfile - --error-logfile -
+
+    healthCheckPath: /health/
+    autoDeployTrigger: commit
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.0"
+      - key: DEBUG
+        value: "false"
+      - key: IS_PRODUCTION
+        value: "true"
+      - key: SECRET_KEY
+        generateValue: true
+      # Set these in the Render dashboard (or with `sync: false` prompts).
+      - key: DATABASE_URL
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+      - key: ALLOWED_HOSTS
+        sync: false
+      - key: CSRF_TRUSTED_ORIGINS
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: PAYMENT_CALLBACK_BASE_URL
+        sync: false
+      - key: RAZORPAY_MODE
+        value: live
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false

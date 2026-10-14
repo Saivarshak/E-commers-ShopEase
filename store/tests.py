@@ -13,6 +13,9 @@ from django.urls import reverse
 
 from shopease.settings import _build_host_security_settings
 from store.models import CartItem, Category, FashionCategory, Order, OrderItem, Product, ProductVariant, SubCategory, UploadedImage
+from django.conf import settings
+from django.core.management import call_command
+from store.management.commands.bootstrap_catalog import prune_unresolved_rows
 
 
 class PublicPolicyPagesTests(TestCase):
@@ -878,3 +881,50 @@ class LegacyCatalogRedirectTests(TestCase):
                     status_code=301,
                     target_status_code=200,
                 )
+
+
+class CatalogBootstrapTests(TestCase):
+    """A brand-new database must be seedable from the shipped catalog fixture."""
+
+    def _fixture_objects(self):
+        fixture_path = os.path.join(settings.BASE_DIR, 'data', 'production_catalog_seed.json')
+        with open(fixture_path, encoding='utf-8') as fh:
+            return json.load(fh)
+
+    def test_shipped_fixture_resolves_every_reference(self):
+        objects = self._fixture_objects()
+        kept, dropped = prune_unresolved_rows(objects)
+
+        self.assertEqual(dropped, [], 'the shipped seed must load as-is')
+        self.assertEqual(len(kept), len(objects))
+
+    def test_rows_with_missing_parents_are_pruned(self):
+        objects = [
+            {'model': 'store.category', 'pk': 1, 'fields': {'category_name': 'mens'}},
+            {'model': 'store.subcategory', 'pk': 1, 'fields': {'category': 1, 'subcategory_name': 'shirts'}},
+            {'model': 'store.product', 'pk': 1, 'fields': {'category': 1, 'subcategory': 1}},
+            {'model': 'store.product', 'pk': 2, 'fields': {'category': 1, 'subcategory': 999}},
+            {'model': 'store.productvariant', 'pk': 1, 'fields': {'product': 1}},
+            {'model': 'store.productvariant', 'pk': 2, 'fields': {'product': 999}},
+        ]
+
+        kept, dropped = prune_unresolved_rows(objects)
+
+        self.assertEqual({(row['model'], row['pk']) for row in dropped},
+                         {('store.product', 2), ('store.productvariant', 2)})
+        self.assertEqual({(row['model'], row['pk']) for row in kept},
+                         {('store.category', 1), ('store.subcategory', 1),
+                          ('store.product', 1), ('store.productvariant', 1)})
+
+    def test_bootstrap_catalog_seeds_an_empty_database(self):
+        self.assertEqual(Product.objects.count(), 0)
+        expected_products = len([row for row in self._fixture_objects()
+                                 if row['model'] == 'store.product'])
+
+        call_command('bootstrap_catalog', verbosity=0)
+
+        self.assertEqual(Product.objects.count(), expected_products)
+
+        # A second boot into a populated database is a no-op, not a re-import.
+        call_command('bootstrap_catalog', verbosity=0)
+        self.assertEqual(Product.objects.count(), expected_products)
